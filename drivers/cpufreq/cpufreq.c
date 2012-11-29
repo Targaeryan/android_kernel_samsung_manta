@@ -956,6 +956,11 @@ static int cpufreq_add_dev(struct device *dev, struct subsys_interface *sif)
 	 */
 	cpumask_and(policy->cpus, policy->cpus, cpu_online_mask);
 
+	if (policy->min < GLOBALKT_MIN_FREQ_LIMIT)
+		policy->min = GLOBALKT_MIN_FREQ_LIMIT;
+	if (policy->max > GLOBALKT_MAX_FREQ_LIMIT)
+		policy->max = GLOBALKT_MAX_FREQ_LIMIT;
+
 	policy->user_policy.min = policy->min;
 	policy->user_policy.max = policy->max;
 
