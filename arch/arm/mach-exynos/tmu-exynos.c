@@ -103,6 +103,7 @@ static void tmu_monitor(struct work_struct *work)
 	int cur_temp;
 
 	cur_temp = get_cur_temp(info);
+	ginfo = info;
 
 	dev_dbg(info->dev, "Current: %dc, FLAG=%d\n", cur_temp, info->tmu_state);
 	if (lcpu_start_throttle == 0)
