@@ -3168,11 +3168,8 @@ static inline void hci_user_confirm_request_evt(struct hci_dev *hdev,
 
 		/* If we're not the initiators request authorization to
 		 * proceed from user space (mgmt_user_confirm with
-		 * confirm_hint set to 1). The exception is if neither
-		 * side had MITM in which case we do auto-accept.
-		 */
-		if (!test_bit(HCI_CONN_AUTH_PEND, &conn->flags) &&
-		    (loc_mitm || rem_mitm)) {
+		 * confirm_hint set to 1). */
+		if (!test_bit(HCI_CONN_AUTH_PEND, &conn->flags)) {
 			BT_DBG("Confirming auto-accept as acceptor");
 			confirm_hint = 1;
 			goto confirm;
@@ -3398,13 +3395,7 @@ static inline void hci_le_ltk_request_evt(struct hci_dev *hdev,
 
 	hci_send_cmd(hdev, HCI_OP_LE_LTK_REPLY, sizeof(cp), &cp);
 
-	/* Ref. Bluetooth Core SPEC pages 1975 and 2004. STK is a
-	 * temporary key used to encrypt a connection following
-	 * pairing. It is used during the Encrypted Session Setup to
-	 * distribute the keys. Later, security can be re-established
-	 * using a distributed LTK.
-	 */
-	if (ltk->type == HCI_SMP_STK_SLAVE) {
+	if (ltk->type & HCI_SMP_STK) {
 		list_del(&ltk->list);
 		kfree(ltk);
 	}
