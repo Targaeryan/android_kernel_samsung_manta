@@ -1411,6 +1411,7 @@ DEFINE_SIMPLE_ATTRIBUTE(debug_shrink_fops, debug_shrink_get,
                         debug_shrink_set, "%llu\n");
 #endif
 
+
 void ion_device_add_heap(struct ion_device *dev, struct ion_heap *heap)
 {
 	if (!heap->ops->allocate || !heap->ops->free || !heap->ops->map_dma ||
