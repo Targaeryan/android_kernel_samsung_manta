@@ -352,8 +352,8 @@ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 CFLAGS_MODULE   =
 AFLAGS_MODULE   =
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	= -mcpu=cortex-a15 -mfpu=neon-vfpv4 -ftree-vectorize
-AFLAGS_KERNEL	= -mcpu=cortex-a15 -mfpu=neon-vfpv4 -ftree-vectorize
+CFLAGS_KERNEL	= -mtune=cortex-a15 -mfpu=neon-vfpv4 -ftree-vectorize
+AFLAGS_KERNEL	= -mtune=cortex-a15 -mfpu=neon-vfpv4 -ftree-vectorize
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
@@ -366,16 +366,18 @@ LINUXINCLUDE    := -I$(srctree)/arch/$(hdr-arch)/include \
 
 KBUILD_CPPFLAGS := -D__KERNEL__
 
+GRAPHITE="-floop-interchange -ftree-loop-distribution -floop-strip-mine -floop-block"
+
 KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
 		   -fno-delete-null-pointer-checks \
-		   -mcpu=cortex-a15 -fomit-frame-pointer -O3 \
-		   -mfpu=neon-vfpv4 -ftree-vectorize
+		   -fomit-frame-pointer -O3 \
+		   -mfpu=neon-vfpv4 -ftree-vectorize -ftree-loop-linear -floop-strip-mine -fgraphite-identity -floop-parallelize-all -floop-interchange -ftree-loop-distribution
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
-KBUILD_AFLAGS   := -D__ASSEMBLY__
+KBUILD_AFLAGS   := -D__ASSEMBLY__ -O3
 KBUILD_AFLAGS_MODULE  := -DMODULE
 KBUILD_CFLAGS_MODULE  := -DMODULE
 KBUILD_LDFLAGS_MODULE := -T $(srctree)/scripts/module-common.lds
