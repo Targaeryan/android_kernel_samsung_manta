@@ -3553,10 +3553,10 @@ static void *bfq_init_queue(struct request_queue *q)
 	bfqd->low_latency = true;
 
 	bfqd->bfq_wr_coeff = 20;
-	bfqd->bfq_wr_rt_max_time = 25;
-	bfqd->bfq_wr_max_time = 25;
-	bfqd->bfq_wr_min_idle_time = 100;
-	bfqd->bfq_wr_min_inter_arr_async = 50;
+	bfqd->bfq_wr_rt_max_time = 70;
+	bfqd->bfq_wr_max_time = 0;
+	bfqd->bfq_wr_min_idle_time = 125;
+	bfqd->bfq_wr_min_inter_arr_async = 75;
 	bfqd->bfq_wr_max_softrt_rate = 2000; /*
 					      * Approximate rate required
 					      * to playback or record a
