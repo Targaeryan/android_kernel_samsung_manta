@@ -104,7 +104,8 @@ enum {
 	META_CP,
 	META_NAT,
 	META_SIT,
-	META_SSA
+	META_SSA,
+	META_POR,
 };
 
 /* for the list of ino */
@@ -137,7 +138,9 @@ struct discard_entry {
 struct fsync_inode_entry {
 	struct list_head list;	/* list head */
 	struct inode *inode;	/* vfs inode pointer */
-	block_t blkaddr;	/* block address locating the last inode */
+	block_t blkaddr;	/* block address locating the last fsync */
+	block_t last_dentry;	/* block address locating the last dentry */
+	block_t last_inode;	/* block address locating the last inode */
 };
 
 #define nats_in_cursum(sum)		(le16_to_cpu(sum->n_nats))
@@ -238,7 +241,7 @@ struct f2fs_inode_info {
 	/* Use below internally in f2fs*/
 	unsigned long flags;		/* use to pass per-file flags */
 	struct rw_semaphore i_sem;	/* protect fi info */
-	atomic_t dirty_dents;		/* # of dirty dentry pages */
+	atomic_t dirty_pages;		/* # of dirty pages */
 	f2fs_hash_t chash;		/* hash value of given file name */
 	unsigned int clevel;		/* maximum level of given file name */
 	nid_t i_xattr_nid;		/* node id that contains xattrs */
@@ -348,18 +351,16 @@ enum {
 };
 
 struct flush_cmd {
-	struct flush_cmd *next;
 	struct completion wait;
+	struct llist_node llnode;
 	int ret;
 };
 
 struct flush_cmd_control {
 	struct task_struct *f2fs_issue_flush;	/* flush thread */
 	wait_queue_head_t flush_wait_queue;	/* waiting queue for wake-up */
-	struct flush_cmd *issue_list;		/* list for command issue */
-	struct flush_cmd *dispatch_list;	/* list for command dispatch */
-	spinlock_t issue_lock;			/* for issue list lock */
-	struct flush_cmd *issue_tail;		/* list tail of issue list */
+	struct llist_head issue_list;		/* list for command issue */
+	struct llist_node *dispatch_list;	/* list for command dispatch */
 };
 
 struct f2fs_sm_info {
@@ -389,6 +390,7 @@ struct f2fs_sm_info {
 
 	unsigned int ipu_policy;	/* in-place-update policy */
 	unsigned int min_ipu_util;	/* in-place-update threshold */
+	unsigned int min_fsync_blocks;	/* threshold for fsync */
 
 	/* for flush command control */
 	struct flush_cmd_control *cmd_control_info;
@@ -750,10 +752,11 @@ static inline void inc_page_count(struct f2fs_sb_info *sbi, int count_type)
 	F2FS_SET_SB_DIRT(sbi);
 }
 
-static inline void inode_inc_dirty_dents(struct inode *inode)
+static inline void inode_inc_dirty_pages(struct inode *inode)
 {
-	inc_page_count(F2FS_I_SB(inode), F2FS_DIRTY_DENTS);
-	atomic_inc(&F2FS_I(inode)->dirty_dents);
+	atomic_inc(&F2FS_I(inode)->dirty_pages);
+	if (S_ISDIR(inode->i_mode))
+		inc_page_count(F2FS_I_SB(inode), F2FS_DIRTY_DENTS);
 }
 
 static inline void dec_page_count(struct f2fs_sb_info *sbi, int count_type)
@@ -761,13 +764,12 @@ static inline void dec_page_count(struct f2fs_sb_info *sbi, int count_type)
 	atomic_dec(&sbi->nr_pages[count_type]);
 }
 
-static inline void inode_dec_dirty_dents(struct inode *inode)
+static inline void inode_dec_dirty_pages(struct inode *inode)
 {
-	if (!S_ISDIR(inode->i_mode))
-		return;
+	atomic_dec(&F2FS_I(inode)->dirty_pages);
 
-	dec_page_count(F2FS_I_SB(inode), F2FS_DIRTY_DENTS);
-	atomic_dec(&F2FS_I(inode)->dirty_dents);
+	if (S_ISDIR(inode->i_mode))
+		dec_page_count(F2FS_I_SB(inode), F2FS_DIRTY_DENTS);
 }
 
 static inline int get_pages(struct f2fs_sb_info *sbi, int count_type)
@@ -775,9 +777,9 @@ static inline int get_pages(struct f2fs_sb_info *sbi, int count_type)
 	return atomic_read(&sbi->nr_pages[count_type]);
 }
 
-static inline int get_dirty_dents(struct inode *inode)
+static inline int get_dirty_pages(struct inode *inode)
 {
-	return atomic_read(&F2FS_I(inode)->dirty_dents);
+	return atomic_read(&F2FS_I(inode)->dirty_pages);
 }
 
 static inline int get_blocktype_secs(struct f2fs_sb_info *sbi, int block_type)
@@ -1298,7 +1300,7 @@ void destroy_segment_manager_caches(void);
  */
 struct page *grab_meta_page(struct f2fs_sb_info *, pgoff_t);
 struct page *get_meta_page(struct f2fs_sb_info *, pgoff_t);
-int ra_meta_pages(struct f2fs_sb_info *, int, int, int);
+int ra_meta_pages(struct f2fs_sb_info *, block_t, int, int);
 long sync_meta_pages(struct f2fs_sb_info *, enum page_type, long);
 void add_dirty_inode(struct f2fs_sb_info *, nid_t, int type);
 void remove_dirty_inode(struct f2fs_sb_info *, nid_t, int type);
@@ -1310,7 +1312,7 @@ void add_orphan_inode(struct f2fs_sb_info *, nid_t);
 void remove_orphan_inode(struct f2fs_sb_info *, nid_t);
 void recover_orphan_inodes(struct f2fs_sb_info *);
 int get_valid_checkpoint(struct f2fs_sb_info *);
-void set_dirty_dir_page(struct inode *, struct page *);
+void update_dirty_page(struct inode *, struct page *);
 void add_dirty_dir_inode(struct inode *);
 void remove_dirty_dir_inode(struct inode *);
 void sync_dirty_dir_inodes(struct f2fs_sb_info *);

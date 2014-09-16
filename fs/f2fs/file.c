@@ -136,6 +136,7 @@ int f2fs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 	struct inode *inode = file->f_mapping->host;
 	struct f2fs_inode_info *fi = F2FS_I(inode);
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	nid_t ino = inode->i_ino;
 	int ret = 0;
 	bool need_cp = false;
 	struct writeback_control wbc = {
@@ -150,12 +151,11 @@ int f2fs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 	trace_f2fs_sync_file_enter(inode);
 
 	/* if fdatasync is triggered, let's do in-place-update */
-	if (datasync)
+	if (get_dirty_pages(inode) <= SM_I(sbi)->min_fsync_blocks)
 		set_inode_flag(fi, FI_NEED_IPU);
-
 	ret = filemap_write_and_wait_range(inode->i_mapping, start, end);
-	if (datasync)
-		clear_inode_flag(fi, FI_NEED_IPU);
+	clear_inode_flag(fi, FI_NEED_IPU);
+
 	if (ret) {
 		trace_f2fs_sync_file_exit(inode, need_cp, datasync, ret);
 		return ret;
@@ -165,13 +165,22 @@ int f2fs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 	 * if there is no written data, don't waste time to write recovery info.
 	 */
 	if (!is_inode_flag_set(fi, FI_APPEND_WRITE) &&
-		!exist_written_data(sbi, inode->i_ino, APPEND_INO)) {
+			!exist_written_data(sbi, ino, APPEND_INO)) {
+		struct page *i = find_get_page(NODE_MAPPING(sbi), ino);
+
+		/* But we need to avoid that there are some inode updates */
+		if ((i && PageDirty(i)) || !fsync_mark_done(sbi, ino)) {
+			f2fs_put_page(i, 0);
+			goto go_write;
+		}
+		f2fs_put_page(i, 0);
+
 		if (is_inode_flag_set(fi, FI_UPDATE_WRITE) ||
-			exist_written_data(sbi, inode->i_ino, UPDATE_INO))
+				exist_written_data(sbi, ino, UPDATE_INO))
 			goto flush_out;
 		goto out;
 	}
-
+go_write:
 	/* guarantee free sections for fsync */
 	f2fs_balance_fs(sbi);
 
@@ -204,24 +213,36 @@ int f2fs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 			up_write(&fi->i_sem);
 		}
 	} else {
-		/* if there is no written node page, write its inode page */
-		while (!sync_node_pages(sbi, inode->i_ino, &wbc)) {
-			if (fsync_mark_done(sbi, inode->i_ino))
-				goto out;
+sync_nodes:
+		sync_node_pages(sbi, ino, &wbc);
+
+		/*
+		 * inode(x) | CP | inode(x) | dnode(F)
+		 *  -> ok
+		 * inode(x) | CP | dnode(F) | inode(x)
+		 *  -> inode(x) | CP | dnode(F) | inode(x) | inode(F)
+		 * CP | inode(x) | dnode(F)
+		 *  -> CP | inode(x) | dnode(F) | inode(DF)
+		 * CP | dnode(F) | inode(x)
+		 *  -> CP | dnode(F) | inode(x) | inode(DF)
+		 */
+		if (!fsync_mark_done(sbi, ino)) {
 			mark_inode_dirty_sync(inode);
 			ret = f2fs_write_inode(inode, NULL);
 			if (ret)
 				goto out;
+			goto sync_nodes;
 		}
-		ret = wait_on_node_pages_writeback(sbi, inode->i_ino);
+
+		ret = wait_on_node_pages_writeback(sbi, ino);
 		if (ret)
 			goto out;
 
 		/* once recovery info is written, don't need to tack this */
-		remove_dirty_inode(sbi, inode->i_ino, APPEND_INO);
+		remove_dirty_inode(sbi, ino, APPEND_INO);
 		clear_inode_flag(fi, FI_APPEND_WRITE);
 flush_out:
-		remove_dirty_inode(sbi, inode->i_ino, UPDATE_INO);
+		remove_dirty_inode(sbi, ino, UPDATE_INO);
 		clear_inode_flag(fi, FI_UPDATE_WRITE);
 		ret = f2fs_issue_flush(F2FS_I_SB(inode));
 	}
@@ -297,7 +318,7 @@ static loff_t f2fs_seek_block(struct file *file, loff_t offset, int whence)
 	mutex_lock(&inode->i_mutex);
 
 	isize = i_size_read(inode);
-	if (offset >= isize || offset < 0)
+	if (offset >= isize)
 		goto fail;
 
 	/* handle inline data case */
@@ -369,6 +390,8 @@ static loff_t f2fs_llseek(struct file *file, loff_t offset, int whence)
 						maxbytes);
 	case SEEK_DATA:
 	case SEEK_HOLE:
+		if (offset < 0)
+			return -ENXIO;
 		return f2fs_seek_block(file, offset, whence);
 	}
 

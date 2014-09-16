@@ -248,8 +248,17 @@ retry:
 
 	/* update fsync_mark if its inode nat entry is still alive */
 	e = __lookup_nat_cache(nm_i, ni->ino);
-	if (e)
+	if (e) {
+		/*
+		 * CP | inode(x) | dnode(F)
+		 *  -> CP | inode(x) | dnode(F) | inode(DF)
+		 */
+		if (!e->checkpointed && !e->fsync_done &&
+				ni->ino != ni->nid && fsync_done)
+			goto skip;
 		e->fsync_done = fsync_done;
+	}
+skip:
 	write_unlock(&nm_i->nat_tree_lock);
 }
 
@@ -1682,7 +1691,7 @@ int restore_node_summary(struct f2fs_sb_info *sbi,
 	struct f2fs_summary *sum_entry;
 	struct inode *inode = sbi->sb->s_bdev->bd_inode;
 	block_t addr;
-	int bio_blocks = MAX_BIO_BLOCKS(max_hw_blocks(sbi));
+	int bio_blocks = MAX_BIO_BLOCKS(sbi);
 	struct page *pages[bio_blocks];
 	int i, idx, last_offset, nrpages, err = 0;
 

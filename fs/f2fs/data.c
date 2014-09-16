@@ -193,7 +193,7 @@ void f2fs_submit_page_mbio(struct f2fs_sb_info *sbi, struct page *page,
 		__submit_merged_bio(io);
 alloc_new:
 	if (io->bio == NULL) {
-		int bio_blocks = MAX_BIO_BLOCKS(max_hw_blocks(sbi));
+		int bio_blocks = MAX_BIO_BLOCKS(sbi);
 
 		io->bio = __bio_alloc(sbi, blk_addr, bio_blocks, is_read);
 		io->fio = *fio;
@@ -863,7 +863,7 @@ done:
 
 	clear_cold_data(page);
 out:
-	inode_dec_dirty_dents(inode);
+	inode_dec_dirty_pages(inode);
 	unlock_page(page);
 	if (need_balance_fs)
 		f2fs_balance_fs(sbi);
@@ -901,7 +901,7 @@ static int f2fs_write_data_pages(struct address_space *mapping,
 		return 0;
 
 	if (S_ISDIR(inode->i_mode) && wbc->sync_mode == WB_SYNC_NONE &&
-			get_dirty_dents(inode) < nr_pages_to_skip(sbi, DATA) &&
+			get_dirty_pages(inode) < nr_pages_to_skip(sbi, DATA) &&
 			available_free_memory(sbi, DIRTY_DENTS))
 		goto skip_write;
 
@@ -923,7 +923,7 @@ static int f2fs_write_data_pages(struct address_space *mapping,
 	return ret;
 
 skip_write:
-	wbc->pages_skipped += get_dirty_dents(inode);
+	wbc->pages_skipped += get_dirty_pages(inode);
 	return 0;
 }
 
@@ -1068,9 +1068,9 @@ static int check_direct_IO(struct inode *inode, int rw,
 	if (offset & blocksize_mask)
 		return -EINVAL;
 
-       for (i = 0; i < nr_segs; i++)
-               if (iov[i].iov_len & blocksize_mask)
-                       return -EINVAL;
+	for (i = 0; i < nr_segs; i++)
+		if (iov[i].iov_len & blocksize_mask)
+			return -EINVAL;
 
 	return 0;
 }
@@ -1095,11 +1095,10 @@ static ssize_t f2fs_direct_IO(int rw, struct kiocb *iocb,
 	/* clear fsync mark to recover these blocks */
 	fsync_mark_clear(F2FS_I_SB(inode), inode->i_ino);
 
-	err = blockdev_direct_IO(rw, iocb, inode, iov, offset, nr_segs,
-							get_data_block);
-
 	trace_f2fs_direct_IO_enter(inode, offset, count, rw);
 
+	err = blockdev_direct_IO(rw, iocb, inode, iov, offset, nr_segs,
+							get_data_block);
 	if (err < 0 && (rw & WRITE))
 		f2fs_write_failed(mapping, offset + count);
 
@@ -1112,7 +1111,7 @@ static void f2fs_invalidate_data_page(struct page *page, unsigned long offset)
 {
 	struct inode *inode = page->mapping->host;
 	if (PageDirty(page))
-		inode_dec_dirty_dents(inode);
+		inode_dec_dirty_pages(inode);
 	ClearPagePrivate(page);
 }
 
@@ -1134,7 +1133,7 @@ static int f2fs_set_data_page_dirty(struct page *page)
 
 	if (!PageDirty(page)) {
 		__set_page_dirty_nobuffers(page);
-		set_dirty_dir_page(inode, page);
+		update_dirty_page(inode, page);
 		return 1;
 	}
 	return 0;
