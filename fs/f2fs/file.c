@@ -169,7 +169,7 @@ int f2fs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 		struct page *i = find_get_page(NODE_MAPPING(sbi), ino);
 
 		/* But we need to avoid that there are some inode updates */
-		if ((i && PageDirty(i)) || !fsync_mark_done(sbi, ino)) {
+		if ((i && PageDirty(i)) || need_inode_block_update(sbi, ino)) {
 			f2fs_put_page(i, 0);
 			goto go_write;
 		}
@@ -216,17 +216,7 @@ go_write:
 sync_nodes:
 		sync_node_pages(sbi, ino, &wbc);
 
-		/*
-		 * inode(x) | CP | inode(x) | dnode(F)
-		 *  -> ok
-		 * inode(x) | CP | dnode(F) | inode(x)
-		 *  -> inode(x) | CP | dnode(F) | inode(x) | inode(F)
-		 * CP | inode(x) | dnode(F)
-		 *  -> CP | inode(x) | dnode(F) | inode(DF)
-		 * CP | dnode(F) | inode(x)
-		 *  -> CP | dnode(F) | inode(x) | inode(DF)
-		 */
-		if (!fsync_mark_done(sbi, ino)) {
+		if (need_inode_block_update(sbi, ino)) {
 			mark_inode_dirty_sync(inode);
 			ret = f2fs_write_inode(inode, NULL);
 			if (ret)
@@ -586,15 +576,22 @@ int f2fs_setattr(struct dentry *dentry, struct iattr *attr)
 	if (err)
 		return err;
 
-	if ((attr->ia_valid & ATTR_SIZE) &&
-			attr->ia_size != i_size_read(inode)) {
+	if (attr->ia_valid & ATTR_SIZE) {
 		err = f2fs_convert_inline_data(inode, attr->ia_size, NULL);
 		if (err)
 			return err;
 
-		truncate_setsize(inode, attr->ia_size);
-		f2fs_truncate(inode);
-		f2fs_balance_fs(F2FS_I_SB(inode));
+		if (attr->ia_size != i_size_read(inode)) {
+			truncate_setsize(inode, attr->ia_size);
+			f2fs_truncate(inode);
+			f2fs_balance_fs(F2FS_I_SB(inode));
+		} else {
+			/*
+			 * giving a chance to truncate blocks past EOF which
+			 * are fallocated with FALLOC_FL_KEEP_SIZE.
+			 */
+			f2fs_truncate(inode);
+		}
 	}
 
 	__setattr_copy(inode, attr);
@@ -675,6 +672,13 @@ static int punch_hole(struct inode *inode, loff_t offset, loff_t len)
 	pgoff_t pg_start, pg_end;
 	loff_t off_start, off_end;
 	int ret = 0;
+
+	if (!S_ISREG(inode->i_mode))
+		return -EOPNOTSUPP;
+
+	/* skip punching hole beyond i_size */
+	if (offset >= inode->i_size)
+		return ret;
 
 	ret = f2fs_convert_inline_data(inode, MAX_INLINE_DATA + 1, NULL);
 	if (ret)

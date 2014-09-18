@@ -44,6 +44,7 @@
  * -> If f2fs_iget fails, then goto next to find inode(DF).
  *    But it will fail due to no inode(DF).
  */
+
 static struct kmem_cache *fsync_entry_slab;
 
 bool space_for_roll_forward(struct f2fs_sb_info *sbi)
@@ -174,11 +175,9 @@ static int find_fsync_dnodes(struct f2fs_sb_info *sbi, struct list_head *head)
 
 		if (blkaddr < SM_I(sbi)->main_blkaddr ||
 					blkaddr > TOTAL_BLKS(sbi))
-			break;
+			return 0;
 
 		page = get_meta_page(sbi, blkaddr);
-		if (IS_ERR(page))
-			return PTR_ERR(page);
 
 		ra_meta_pages(sbi, next_blkaddr_of_node(page),
 					MAX_BIO_BLOCKS(sbi), META_POR);
@@ -443,14 +442,14 @@ static int recover_data(struct f2fs_sb_info *sbi,
 			break;
 
 		page = get_meta_page(sbi, blkaddr);
-		if (IS_ERR(page))
-			return PTR_ERR(page);
 
 		ra_meta_pages(sbi, next_blkaddr_of_node(page),
 					MAX_BIO_BLOCKS(sbi), META_POR);
 
-		if (cp_ver != cpver_of_node(page))
+		if (cp_ver != cpver_of_node(page)) {
+			f2fs_put_page(page, 1);
 			break;
+		}
 
 		entry = get_fsync_inode(head, ino_of_node(page));
 		if (!entry)
@@ -468,8 +467,10 @@ static int recover_data(struct f2fs_sb_info *sbi,
 				break;
 		}
 		err = do_recover_data(sbi, entry->inode, page, blkaddr);
-		if (err)
+		if (err) {
+			f2fs_put_page(page, 1);
 			break;
+		}
 
 		if (entry->blkaddr == blkaddr) {
 			iput(entry->inode);
@@ -481,7 +482,6 @@ next:
 		blkaddr = next_blkaddr_of_node(page);
 		f2fs_put_page(page, 1);
 	}
-	f2fs_put_page(page, 1);
 	if (!err)
 		allocate_new_segments(sbi);
 	return err;

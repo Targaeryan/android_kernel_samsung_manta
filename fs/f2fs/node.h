@@ -39,10 +39,15 @@ struct node_info {
 	unsigned char version;	/* version of the node */
 };
 
+enum {
+	IS_CHECKPOINTED,	/* is it checkpointed before? */
+	HAS_FSYNCED_INODE,	/* is the inode fsynced before? */
+	HAS_LAST_FSYNC,		/* has the latest node fsync mark? */
+};
+
 struct nat_entry {
 	struct list_head list;	/* for clean or dirty nat list */
-	bool checkpointed;	/* whether it is checkpointed or not */
-	bool fsync_done;	/* whether the latest node has fsync mark */
+	unsigned char flag;	/* for node information bits */
 	struct node_info ni;	/* in-memory node information */
 };
 
@@ -56,16 +61,34 @@ struct nat_entry {
 #define nat_set_version(nat, v)		(nat->ni.version = v)
 
 #define __set_nat_cache_dirty(nm_i, ne)					\
-	do {								\
-		ne->checkpointed = false;				\
-		list_move_tail(&ne->list, &nm_i->dirty_nat_entries);	\
-	} while (0)
+		list_move_tail(&ne->list, &nm_i->dirty_nat_entries);
 #define __clear_nat_cache_dirty(nm_i, ne)				\
-	do {								\
-		ne->checkpointed = true;				\
-		list_move_tail(&ne->list, &nm_i->nat_entries);		\
-	} while (0)
+		list_move_tail(&ne->list, &nm_i->nat_entries);
 #define inc_node_version(version)	(++version)
+
+static inline void set_nat_flag(struct nat_entry *ne,
+				unsigned int type, bool set)
+{
+	unsigned char mask = 0x01 << type;
+	if (set)
+		ne->flag |= mask;
+	else
+		ne->flag &= ~mask;
+}
+
+static inline bool get_nat_flag(struct nat_entry *ne, unsigned int type)
+{
+	unsigned char mask = 0x01 << type;
+	return ne->flag & mask;
+}
+
+static inline void nat_reset_flag(struct nat_entry *ne)
+{
+	/* these states can be set only after checkpoint was done */
+	set_nat_flag(ne, IS_CHECKPOINTED, true);
+	set_nat_flag(ne, HAS_FSYNCED_INODE, false);
+	set_nat_flag(ne, HAS_LAST_FSYNC, true);
+}
 
 static inline void node_info_from_raw_nat(struct node_info *ni,
 						struct f2fs_nat_entry *raw_ne)

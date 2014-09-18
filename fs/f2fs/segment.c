@@ -444,8 +444,8 @@ static void locate_dirty_segment(struct f2fs_sb_info *sbi, unsigned int segno)
 static int f2fs_issue_discard(struct f2fs_sb_info *sbi,
 				block_t blkstart, block_t blklen)
 {
-	sector_t start = SECTOR_FROM_BLOCK(sbi, blkstart);
-	sector_t len = SECTOR_FROM_BLOCK(sbi, blklen);
+	sector_t start = SECTOR_FROM_BLOCK(blkstart);
+	sector_t len = SECTOR_FROM_BLOCK(blklen);
 	trace_f2fs_issue_discard(sbi->sb, blkstart, blklen);
 	return blkdev_issue_discard(sbi->sb->s_bdev, start, len, GFP_NOFS, 0);
 }
@@ -2002,7 +2002,7 @@ int build_segment_manager(struct f2fs_sb_info *sbi)
 	sm_info->ssa_blkaddr = le32_to_cpu(raw_super->ssa_blkaddr);
 	sm_info->rec_prefree_segments = sm_info->main_segments *
 					DEF_RECLAIM_PREFREE_SEGMENTS / 100;
-	sm_info->ipu_policy = F2FS_IPU_FSYNC;
+	sm_info->ipu_policy = 1 << F2FS_IPU_FSYNC;
 	sm_info->min_ipu_util = DEF_MIN_IPU_UTIL;
 	sm_info->min_fsync_blocks = DEF_MIN_FSYNC_BLOCKS;
 

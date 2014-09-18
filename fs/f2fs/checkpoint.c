@@ -72,7 +72,7 @@ out:
 	return page;
 }
 
-static inline int get_max_meta_blks(struct f2fs_sb_info *sbi, int type)
+static inline block_t get_max_meta_blks(struct f2fs_sb_info *sbi, int type)
 {
 	switch (type) {
 	case META_NAT:
@@ -97,7 +97,8 @@ int ra_meta_pages(struct f2fs_sb_info *sbi, block_t start, int nrpages, int type
 	block_t prev_blk_addr = 0;
 	struct page *page;
 	block_t blkno = start;
-	int max_blks = get_max_meta_blks(sbi, type);
+	block_t max_blks = get_max_meta_blks(sbi, type);
+	block_t min_blks = SM_I(sbi)->seg0_blkaddr;
 
 	struct f2fs_io_info fio = {
 		.type = META,
@@ -127,11 +128,8 @@ int ra_meta_pages(struct f2fs_sb_info *sbi, block_t start, int nrpages, int type
 			break;
 		case META_SSA:
 		case META_CP:
-			/* get ssa/cp block addr */
-			blk_addr = blkno;
-			break;
 		case META_POR:
-			if (unlikely(blkno >= max_blks))
+			if (blkno >= max_blks || blkno < min_blks)
 				goto out;
 			blk_addr = blkno;
 			break;
@@ -640,9 +638,12 @@ void update_dirty_page(struct inode *inode, struct page *page)
 	struct dir_inode_entry *new;
 	int ret = 0;
 
+	if (!S_ISDIR(inode->i_mode) && !S_ISREG(inode->i_mode))
+		return;
+
 	if (!S_ISDIR(inode->i_mode)) {
 		inode_inc_dirty_pages(inode);
-		return;
+		goto out;
 	}
 
 	new = f2fs_kmem_cache_alloc(inode_entry_slab, GFP_NOFS);
@@ -652,11 +653,12 @@ void update_dirty_page(struct inode *inode, struct page *page)
 	spin_lock(&sbi->dir_inode_lock);
 	ret = __add_dirty_inode(inode, new);
 	inode_inc_dirty_pages(inode);
-	SetPagePrivate(page);
 	spin_unlock(&sbi->dir_inode_lock);
 
 	if (ret)
 		kmem_cache_free(inode_entry_slab, new);
+out:
+	SetPagePrivate(page);
 }
 
 void add_dirty_dir_inode(struct inode *inode)

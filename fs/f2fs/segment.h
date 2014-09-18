@@ -89,12 +89,12 @@
 #define TOTAL_SECS(sbi)	(sbi->total_sections)
 #define TOTAL_BLKS(sbi)	(SM_I(sbi)->segment_count << sbi->log_blocks_per_seg)
 
-#define SECTOR_FROM_BLOCK(sbi, blk_addr)				\
-	(((sector_t)blk_addr) << (sbi)->log_sectors_per_block)
-#define SECTOR_TO_BLOCK(sbi, sectors)					\
-	(sectors >> (sbi)->log_sectors_per_block)
-#define MAX_BIO_BLOCKS(sbi)					\
-	(min((int)max_hw_blocks(sbi), BIO_MAX_PAGES))
+#define SECTOR_FROM_BLOCK(blk_addr)					\
+	(((sector_t)blk_addr) << F2FS_LOG_SECTORS_PER_BLOCK)
+#define SECTOR_TO_BLOCK(sectors)					\
+	(sectors >> F2FS_LOG_SECTORS_PER_BLOCK)
+#define MAX_BIO_BLOCKS(sbi)						\
+	((int)min((int)max_hw_blocks(sbi), BIO_MAX_PAGES))
 
 /*
  * indicate a block allocation direction: RIGHT and LEFT.
@@ -437,8 +437,9 @@ static inline int reserved_sections(struct f2fs_sb_info *sbi)
 
 static inline bool need_SSR(struct f2fs_sb_info *sbi)
 {
-	return (prefree_segments(sbi) / sbi->segs_per_sec)
-			+ free_sections(sbi) < overprovision_sections(sbi);
+	int node_secs = get_blocktype_secs(sbi, F2FS_DIRTY_NODES);
+	return (prefree_segments(sbi) / sbi->segs_per_sec) +
+		free_sections(sbi) < (reserved_sections(sbi) + node_secs);
 }
 
 static inline bool has_not_enough_free_secs(struct f2fs_sb_info *sbi, int freed)
@@ -487,40 +488,33 @@ enum {
 	F2FS_IPU_UTIL,
 	F2FS_IPU_SSR_UTIL,
 	F2FS_IPU_FSYNC,
-	F2FS_IPU_DISABLE,
 };
 
 static inline bool need_inplace_update(struct inode *inode)
 {
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	unsigned int policy = SM_I(sbi)->ipu_policy;
 
 	/* IPU can be done only for the user data */
 	if (S_ISDIR(inode->i_mode))
 		return false;
 
-	switch (SM_I(sbi)->ipu_policy) {
-	case F2FS_IPU_FORCE:
+	if (policy & (0x1 << F2FS_IPU_FORCE))
 		return true;
-	case F2FS_IPU_SSR:
-		if (need_SSR(sbi))
-			return true;
-		break;
-	case F2FS_IPU_UTIL:
-		if (utilization(sbi) > SM_I(sbi)->min_ipu_util)
-			return true;
-		break;
-	case F2FS_IPU_SSR_UTIL:
-		if (need_SSR(sbi) && utilization(sbi) > SM_I(sbi)->min_ipu_util)
-			return true;
-		break;
-	case F2FS_IPU_FSYNC:
-		/* this is only set during fdatasync */
-		if (is_inode_flag_set(F2FS_I(inode), FI_NEED_IPU))
-			return true;
-		break;
-	case F2FS_IPU_DISABLE:
-		break;
-	}
+	if (policy & (0x1 << F2FS_IPU_SSR) && need_SSR(sbi))
+		return true;
+	if (policy & (0x1 << F2FS_IPU_UTIL) &&
+			utilization(sbi) > SM_I(sbi)->min_ipu_util)
+		return true;
+	if (policy & (0x1 << F2FS_IPU_SSR_UTIL) && need_SSR(sbi) &&
+			utilization(sbi) > SM_I(sbi)->min_ipu_util)
+		return true;
+
+	/* this is only set during fdatasync */
+	if (policy & (0x1 << F2FS_IPU_FSYNC) &&
+			is_inode_flag_set(F2FS_I(inode), FI_NEED_IPU))
+		return true;
+
 	return false;
 }
 
@@ -711,7 +705,7 @@ static inline unsigned int max_hw_blocks(struct f2fs_sb_info *sbi)
 {
 	struct block_device *bdev = sbi->sb->s_bdev;
 	struct request_queue *q = bdev_get_queue(bdev);
-	return SECTOR_TO_BLOCK(sbi, queue_max_sectors(q));
+	return SECTOR_TO_BLOCK(queue_max_sectors(q));
 }
 
 /*
