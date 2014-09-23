@@ -1,6 +1,6 @@
 VERSION = 3
 PATCHLEVEL = 4
-SUBLEVEL = 67
+SUBLEVEL = 103
 EXTRAVERSION =
 NAME = Saber-toothed Squirrel
 
@@ -372,7 +372,8 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Wno-format-security \
 		   -fno-delete-null-pointer-checks \
 		   -fomit-frame-pointer -O3 \
-		   -mfpu=neon-vfpv4 -ftree-vectorize -ftree-loop-linear -floop-strip-mine -fgraphite-identity -floop-parallelize-all -floop-interchange -ftree-loop-distribution -floop-block
+		   -mfpu=neon-vfpv4 -ftree-vectorize -marm -ftree-loop-linear -floop-strip-mine -fgraphite-identity -floop-parallelize-all -floop-interchange -ftree-loop-distribution -floop-block
+
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__ -O3
@@ -595,6 +596,8 @@ ifndef CONFIG_FUNCTION_TRACER
 KBUILD_CFLAGS	+= -fomit-frame-pointer
 endif
 endif
+
+KBUILD_CFLAGS   += $(call cc-option, -fno-var-tracking-assignments)
 
 ifdef CONFIG_DEBUG_INFO
 KBUILD_CFLAGS	+= -g
