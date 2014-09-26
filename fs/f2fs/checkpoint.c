@@ -72,6 +72,21 @@ out:
 	return page;
 }
 
+struct page *get_meta_page_ra(struct f2fs_sb_info *sbi, pgoff_t index)
+{
+	bool readahead = false;
+	struct page *page;
+
+	page = find_get_page(META_MAPPING(sbi), index);
+	if (!page || (page && !PageUptodate(page)))
+		readahead = true;
+	f2fs_put_page(page, 0);
+
+	if (readahead)
+		ra_meta_pages(sbi, index, MAX_BIO_BLOCKS(sbi), META_POR);
+	return get_meta_page(sbi, index);
+}
+
 static inline block_t get_max_meta_blks(struct f2fs_sb_info *sbi, int type)
 {
 	switch (type) {
@@ -83,7 +98,7 @@ static inline block_t get_max_meta_blks(struct f2fs_sb_info *sbi, int type)
 	case META_CP:
 		return 0;
 	case META_POR:
-		return SM_I(sbi)->main_blkaddr + sbi->user_block_count;
+		return MAX_BLKADDR(sbi);
 	default:
 		BUG();
 	}
@@ -98,7 +113,6 @@ int ra_meta_pages(struct f2fs_sb_info *sbi, block_t start, int nrpages, int type
 	struct page *page;
 	block_t blkno = start;
 	block_t max_blks = get_max_meta_blks(sbi, type);
-	block_t min_blks = SM_I(sbi)->seg0_blkaddr;
 
 	struct f2fs_io_info fio = {
 		.type = META,
@@ -129,7 +143,9 @@ int ra_meta_pages(struct f2fs_sb_info *sbi, block_t start, int nrpages, int type
 		case META_SSA:
 		case META_CP:
 		case META_POR:
-			if (blkno >= max_blks || blkno < min_blks)
+			if (unlikely(blkno >= max_blks))
+				goto out;
+			if (unlikely(blkno < SEG0_BLKADDR(sbi)))
 				goto out;
 			blk_addr = blkno;
 			break;
