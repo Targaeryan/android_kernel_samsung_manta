@@ -16,7 +16,7 @@ export PARENT_DIR=`readlink -f ..`
 export INITRAMFS_DEST=$KERNELDIR/kernel/usr/initramfs
 export INITRAMFS_SOURCE=/home/khaon/Documents/kernels/Ramdisks/AOSP_MANTA_4.4
 export PACKAGEDIR=/home/khaon/Documents/kernels/Packages/AOSP_Manta
-export META_INF=/home/khaon/Documents/kernels/Packages/META-INF
+export ZIP_TEMPLATE=/home/khaon/Documents/kernels/Packages/META-INF/Manta
 #Enable FIPS mode
 export USE_SEC_FIPS_MODE=true
 export ARCH=arm
@@ -69,11 +69,11 @@ if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
 	./mkbootimg --cmdline 'console = null' --kernel $PACKAGEDIR/zImage --ramdisk $PACKAGEDIR/ramdisk.gz --base 0x10000000 --pagesize 2048 --ramdiskaddr 0x11000000 --output $PACKAGEDIR/boot.img 
 	export curdate=`date "+%m-%d-%Y"`
 	cd $PACKAGEDIR
-	cp -R $META_INF .
+	cp -R $ZIP_TEMPLATE/* .
 	rm ramdisk.gz
 	rm zImage
-	rm ../khaon_kernel*.zip
-	zip -r ../khaon_kernel-$curdate.zip .
+	rm ../khaon_kernel_manta*.zip
+	zip -r ../khaon_kernel_manta-$curdate.zip .
 	cd $KERNELDIR
 else
 	echo "KERNEL DID NOT BUILD! no zImage exist"
