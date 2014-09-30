@@ -72,8 +72,8 @@ if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
 	cp -R $ZIP_TEMPLATE/* .
 	rm ramdisk.gz
 	rm zImage
-	rm ../khaon_kernel_manta*.zip
-	zip -r ../khaon_kernel_manta-$curdate.zip .
+	rm ../khaon_kernel_manta_go*.zip
+	zip -r ../khaon_kernel_manta_google_mainline-$curdate.zip .
 	cd $KERNELDIR
 else
 	echo "KERNEL DID NOT BUILD! no zImage exist"
