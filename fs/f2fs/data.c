@@ -935,6 +935,7 @@ skip_write:
 	wbc->pages_skipped += get_dirty_pages(inode);
 	return 0;
 }
+
 static void f2fs_write_failed(struct address_space *mapping, loff_t to)
 {
 	struct inode *inode = mapping->host;
@@ -1053,7 +1054,7 @@ static int f2fs_write_end(struct file *file,
 	trace_f2fs_write_end(inode, pos, len, copied);
 
 	if (is_inode_flag_set(F2FS_I(inode), FI_ATOMIC_FILE))
-		get_page(page);
+		prepare_atomic_page(inode, page);
 	else
 		set_page_dirty(page);
 

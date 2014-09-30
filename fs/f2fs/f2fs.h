@@ -276,7 +276,9 @@ struct f2fs_inode_info {
 	struct extent_info ext;		/* in-memory extent cache entry */
 	struct dir_inode_entry *dirty_dir;	/* the pointer of dirty dir */
 
-	struct list_head atomic_pages;	/* atomic page indexes */
+	struct list_head atomic_pages;		/* atomic page indexes */
+	spinlock_t atomic_lock;			/* lock for atomic pages */
+	struct radix_tree_root atomic_root;	/* root of the atomic pages */
 };
 
 static inline void get_extent_info(struct extent_info *ext,
@@ -1295,7 +1297,8 @@ void destroy_node_manager_caches(void);
 /*
  * segment.c
  */
-void prepare_atomic_pages(struct inode *, struct atomic_w *);
+void register_atomic_pages(struct inode *, struct atomic_w *);
+void prepare_atomic_page(struct inode *, struct page *);
 void commit_atomic_pages(struct inode *, u64, bool);
 void f2fs_balance_fs(struct f2fs_sb_info *);
 void f2fs_balance_fs_bg(struct f2fs_sb_info *);
@@ -1378,7 +1381,6 @@ int f2fs_fiemap(struct inode *inode, struct fiemap_extent_info *, u64, u64);
 /*
  * gc.c
  */
-void move_data_page(struct inode *, struct page *, int);
 int start_gc_thread(struct f2fs_sb_info *);
 void stop_gc_thread(struct f2fs_sb_info *);
 block_t start_bidx_of_node(unsigned int, struct f2fs_inode_info *);

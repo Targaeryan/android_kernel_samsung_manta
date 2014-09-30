@@ -175,11 +175,10 @@ struct segment_allocation {
 	void (*allocate_segment)(struct f2fs_sb_info *, int, bool);
 };
 
-struct atomic_range {
+struct atomic_pages {
 	struct list_head list;
 	u64 aid;
-	pgoff_t start;
-	pgoff_t end;
+	struct page *page;
 };
 
 struct sit_info {

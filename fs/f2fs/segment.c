@@ -222,64 +222,98 @@ found_middle:
 }
 
 /* For atomic write support */
-void prepare_atomic_pages(struct inode *inode, struct atomic_w *aw)
+void register_atomic_pages(struct inode *inode, struct atomic_w *aw)
 {
 	pgoff_t start = aw->pos >> PAGE_CACHE_SHIFT;
 	pgoff_t end = (aw->pos + aw->count + PAGE_CACHE_SIZE - 1) >>
 						PAGE_CACHE_SHIFT;
-	struct atomic_range *new;
+	struct atomic_pages *cur;
 
+	spin_lock(&F2FS_I(inode)->atomic_lock);
+	list_for_each_entry(cur, &F2FS_I(inode)->atomic_pages, list)
+		if (cur->aid == (u64)current->pid &&
+				start <= cur->page->index &&
+				cur->page->index < end)
+			cur->aid = aw->aid;
+	spin_unlock(&F2FS_I(inode)->atomic_lock);
+}
+
+void prepare_atomic_page(struct inode *inode, struct page *page)
+{
+	struct f2fs_inode_info *fi = F2FS_I(inode);
+	struct atomic_pages *new;
+	int err;
+retry:
 	new = f2fs_kmem_cache_alloc(aw_entry_slab, GFP_NOFS);
 
 	/* add atomic page indices to the list */
-	new->aid = aw->aid;
-	new->start = start;
-	new->end = end;
+	new->aid = (u64)current->pid;
+	new->page = page;
+	get_page(page);
 	INIT_LIST_HEAD(&new->list);
-	list_add_tail(&new->list, &F2FS_I(inode)->atomic_pages);
+
+	/* increase reference count with clean state */
+	spin_lock(&fi->atomic_lock);
+	err = radix_tree_insert(&fi->atomic_root, page->index, new);
+	if (err == -EEXIST) {
+		f2fs_put_page(page, 0);
+		spin_unlock(&fi->atomic_lock);
+		kmem_cache_free(aw_entry_slab, new);
+		return;
+	} else if (err) {
+		spin_unlock(&fi->atomic_lock);
+		kmem_cache_free(aw_entry_slab, new);
+		goto retry;
+	}
+	list_add_tail(&new->list, &fi->atomic_pages);
+	spin_unlock(&fi->atomic_lock);
 }
 
 void commit_atomic_pages(struct inode *inode, u64 aid, bool abort)
 {
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
-	struct atomic_range *cur, *tmp;
-	u64 start;
-	struct page *page;
+	struct f2fs_inode_info *fi = F2FS_I(inode);
+	struct atomic_pages *cur, *tmp;
+	LIST_HEAD(target);
+	struct f2fs_io_info fio = {
+		.type = DATA,
+		.rw = WRITE_SYNC,
+	};
+
+	/* Step #1: move the pages to a temp list */
+	spin_lock(&fi->atomic_lock);
+	list_for_each_entry_safe(cur, tmp, &fi->atomic_pages, list) {
+		if (!abort && cur->aid != aid)
+			continue;
+		radix_tree_delete(&fi->atomic_root, cur->page->index);
+		list_move_tail(&cur->list, &target);
+	}
+	spin_unlock(&fi->atomic_lock);
 
 	if (abort)
 		goto release;
 
 	f2fs_balance_fs(sbi);
-	mutex_lock(&sbi->cp_mutex);
+	f2fs_lock_op(sbi);
 
-	/* Step #1: write all the pages */
-	list_for_each_entry(cur, &F2FS_I(inode)->atomic_pages, list) {
-		if (cur->aid != aid)
-			continue;
-
-		for (start = cur->start; start < cur->end; start++) {
-			page = grab_cache_page(inode->i_mapping, start);
-			WARN_ON(!page);
-			move_data_page(inode, page, FG_GC);
-		}
+	/* Step #2: write all the pages */
+	list_for_each_entry(cur, &target, list) {
+		lock_page(cur->page);
+		f2fs_wait_on_page_writeback(cur->page, DATA);
+		if (clear_page_dirty_for_io(cur->page))
+			inode_dec_dirty_pages(inode);
+		do_write_data_page(cur->page, &fio);
+		unlock_page(cur->page);
 	}
 	f2fs_submit_merged_bio(sbi, DATA, WRITE);
-	mutex_unlock(&sbi->cp_mutex);
+	f2fs_unlock_op(sbi);
 release:
-	/* Step #2: wait for writeback */
-	list_for_each_entry_safe(cur, tmp, &F2FS_I(inode)->atomic_pages, list) {
-		if (cur->aid != aid && !abort)
-			continue;
+	/* Step #3: wait for writeback */
+	list_for_each_entry_safe(cur, tmp, &target, list) {
+		wait_on_page_writeback(cur->page);
 
-		for (start = cur->start; start < cur->end; start++) {
-			page = find_get_page(inode->i_mapping, start);
-			WARN_ON(!page);
-			wait_on_page_writeback(page);
-			f2fs_put_page(page, 0);
-
-			/* release reference got by atomic_write operation */
-			f2fs_put_page(page, 0);
-		}
+		/* release reference got by atomic_write operation */
+		f2fs_put_page(cur->page, 0);
 		list_del(&cur->list);
 		kmem_cache_free(aw_entry_slab, cur);
 	}
@@ -2293,7 +2327,7 @@ int __init create_segment_manager_caches(void)
 	if (!sit_entry_set_slab)
 		goto destory_discard_entry;
 	aw_entry_slab = f2fs_kmem_cache_create("atomic_entry",
-			sizeof(struct atomic_range));
+			sizeof(struct atomic_pages));
 	if (!aw_entry_slab)
 		goto destroy_sit_entry_set;
 	return 0;
@@ -2310,4 +2344,5 @@ void destroy_segment_manager_caches(void)
 {
 	kmem_cache_destroy(sit_entry_set_slab);
 	kmem_cache_destroy(discard_entry_slab);
+	kmem_cache_destroy(aw_entry_slab);
 }
