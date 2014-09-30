@@ -374,8 +374,7 @@ static struct inode *f2fs_alloc_inode(struct super_block *sb)
 	rwlock_init(&fi->ext.ext_lock);
 	init_rwsem(&fi->i_sem);
 	INIT_LIST_HEAD(&fi->atomic_pages);
-	spin_lock_init(&fi->atomic_lock);
-	INIT_RADIX_TREE(&fi->atomic_root, GFP_ATOMIC);
+	mutex_init(&fi->atomic_lock);
 
 	set_inode_flag(fi, FI_NEW_INODE);
 

@@ -1054,7 +1054,7 @@ static int f2fs_write_end(struct file *file,
 	trace_f2fs_write_end(inode, pos, len, copied);
 
 	if (is_inode_flag_set(F2FS_I(inode), FI_ATOMIC_FILE))
-		prepare_atomic_page(inode, page);
+		register_atomic_page(inode, page);
 	else
 		set_page_dirty(page);
 
@@ -1122,6 +1122,9 @@ static void f2fs_invalidate_data_page(struct page *page, unsigned long offset)
 
 	if (offset % PAGE_CACHE_SIZE)
 		return;
+
+	if (is_inode_flag_set(F2FS_I(inode), FI_ATOMIC_FILE))
+		invalidate_atomic_page(inode, page);
 
 	if (PageDirty(page))
 		inode_dec_dirty_pages(inode);

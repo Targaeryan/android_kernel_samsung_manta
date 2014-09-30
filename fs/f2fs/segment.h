@@ -556,8 +556,7 @@ static inline unsigned short curseg_blkoff(struct f2fs_sb_info *sbi, int type)
 #ifdef CONFIG_F2FS_CHECK_FS
 static inline void check_seg_range(struct f2fs_sb_info *sbi, unsigned int segno)
 {
-	unsigned int end_segno = SM_I(sbi)->segment_count - 1;
-	BUG_ON(segno > end_segno);
+	BUG_ON(segno > TOTAL_SEGS(sbi) - 1);
 }
 
 static inline void verify_block_addr(struct f2fs_sb_info *sbi, block_t blk_addr)
@@ -572,8 +571,6 @@ static inline void verify_block_addr(struct f2fs_sb_info *sbi, block_t blk_addr)
 static inline void check_block_count(struct f2fs_sb_info *sbi,
 		int segno, struct f2fs_sit_entry *raw_sit)
 {
-	struct f2fs_sm_info *sm_info = SM_I(sbi);
-	unsigned int end_segno = sm_info->segment_count - 1;
 	bool is_valid  = test_bit_le(0, raw_sit->valid_map) ? true : false;
 	int valid_blocks = 0;
 	int cur_pos = 0, next_pos;
@@ -582,7 +579,7 @@ static inline void check_block_count(struct f2fs_sb_info *sbi,
 	BUG_ON(GET_SIT_VBLOCKS(raw_sit) > sbi->blocks_per_seg);
 
 	/* check boundary of a given segment number */
-	BUG_ON(segno > end_segno);
+	BUG_ON(segno > TOTAL_SEGS(sbi) - 1);
 
 	/* check bitmap with valid block count */
 	do {
@@ -603,9 +600,7 @@ static inline void check_block_count(struct f2fs_sb_info *sbi,
 #else
 static inline void check_seg_range(struct f2fs_sb_info *sbi, unsigned int segno)
 {
-	unsigned int end_segno = SM_I(sbi)->segment_count - 1;
-
-	if (segno > end_segno)
+	if (segno > TOTAL_SEGS(sbi) - 1)
 		sbi->need_fsck = true;
 }
 
@@ -621,14 +616,12 @@ static inline void verify_block_addr(struct f2fs_sb_info *sbi, block_t blk_addr)
 static inline void check_block_count(struct f2fs_sb_info *sbi,
 		int segno, struct f2fs_sit_entry *raw_sit)
 {
-	unsigned int end_segno = SM_I(sbi)->segment_count - 1;
-
 	/* check segment usage */
 	if (GET_SIT_VBLOCKS(raw_sit) > sbi->blocks_per_seg)
 		sbi->need_fsck = true;
 
 	/* check boundary of a given segment number */
-	if (segno > end_segno)
+	if (segno > TOTAL_SEGS(sbi) - 1)
 		sbi->need_fsck = true;
 }
 #endif

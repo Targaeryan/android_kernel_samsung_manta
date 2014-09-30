@@ -197,8 +197,8 @@ static inline bool __has_cursum_space(struct f2fs_summary_block *sum, int size,
 #define F2FS_IOC_SETFLAGS		FS_IOC_SETFLAGS
 
 #define F2FS_IOCTL_MAGIC		0xf5
-#define F2FS_IOC_ATOMIC_WRITE	_IOW(F2FS_IOCTL_MAGIC, 1, struct atomic_w)
-#define F2FS_IOC_ATOMIC_COMMIT	_IOW(F2FS_IOCTL_MAGIC, 2, u64)
+#define F2FS_IOC_ATOMIC_OPEN	_IO(F2FS_IOCTL_MAGIC, 1)
+#define F2FS_IOC_ATOMIC_COMMIT	_IO(F2FS_IOCTL_MAGIC, 2)
 
 struct atomic_w {
 	u64 aid;		/* atomic write id */
@@ -277,8 +277,7 @@ struct f2fs_inode_info {
 	struct dir_inode_entry *dirty_dir;	/* the pointer of dirty dir */
 
 	struct list_head atomic_pages;		/* atomic page indexes */
-	spinlock_t atomic_lock;			/* lock for atomic pages */
-	struct radix_tree_root atomic_root;	/* root of the atomic pages */
+	struct mutex atomic_lock;		/* lock for atomic pages */
 };
 
 static inline void get_extent_info(struct extent_info *ext,
@@ -1297,9 +1296,9 @@ void destroy_node_manager_caches(void);
 /*
  * segment.c
  */
-void register_atomic_pages(struct inode *, struct atomic_w *);
-void prepare_atomic_page(struct inode *, struct page *);
-void commit_atomic_pages(struct inode *, u64, bool);
+void register_atomic_page(struct inode *, struct page *);
+void invalidate_atomic_page(struct inode *, struct page *);
+void commit_atomic_pages(struct inode *, bool);
 void f2fs_balance_fs(struct f2fs_sb_info *);
 void f2fs_balance_fs_bg(struct f2fs_sb_info *);
 int f2fs_issue_flush(struct f2fs_sb_info *);
