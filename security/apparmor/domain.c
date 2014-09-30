@@ -780,7 +780,11 @@ int aa_change_profile(const char *ns_name, const char *hname, bool onexec,
 	 * no_new_privs is set because this aways results in a reduction
 	 * of permissions.
 	 */
+<<<<<<< HEAD
 	if (current->no_new_privs && !unconfined(profile)) {
+=======
+	if (task_no_new_privs(current) && !unconfined(profile)) {
+>>>>>>> common/android-3.4
 		put_cred(cred);
 		return -EPERM;
 	}
