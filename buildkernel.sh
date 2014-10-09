@@ -54,7 +54,7 @@ make khaon_manta_defconfig
 make -j12
 
 echo "${txtbld} Copy modules to Package ${txtrst} "
-cp -a $(find . -name *.ko -print |grep -v initramfs) $PACKAGEDIR/system/lib/modules/
+cp -a $(find . -name *.ko -print |grep -v initramfs) $PACKAGEDIR/system/lib/modules
 
 echo "${txtbld} Copy scripts to init.d ${txtrst}"
 cp $KERNELDIR/frandom/00frandom $PACKAGEDIR/system/etc/init.d
@@ -72,8 +72,8 @@ if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
 	cp -R $ZIP_TEMPLATE/* .
 	rm ramdisk.gz
 	rm zImage
-	rm ../khaon_kernel_manta_go*.zip
-	zip -r ../khaon_kernel_manta_google_mainline-$curdate.zip .
+	rm ../khaon_kernel_manta_linux*.zip
+	zip -r ../khaon_kernel_manta_linux_mainline-$curdate.zip .
 	cd $KERNELDIR
 else
 	echo "KERNEL DID NOT BUILD! no zImage exist"
