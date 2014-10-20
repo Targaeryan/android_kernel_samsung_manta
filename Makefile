@@ -352,8 +352,8 @@ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 CFLAGS_MODULE   =
 AFLAGS_MODULE   =
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	= -mtune=cortex-a15 -mfpu=neon-vfpv4 -ftree-vectorize
-AFLAGS_KERNEL	= -mtune=cortex-a15 -mfpu=neon-vfpv4 -ftree-vectorize
+CFLAGS_KERNEL	= -mtune=cortex-a15 -mfpu=neon-vfpv4 -ftree-vectorize -funsafe-math-optimizations
+AFLAGS_KERNEL	= -mtune=cortex-a15 -mfpu=neon-vfpv4 -ftree-vectorize -funsafe-math-optimizations
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
@@ -372,7 +372,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Wno-format-security \
 		   -fno-delete-null-pointer-checks \
 		   -fomit-frame-pointer -O3 \
-		   -mfpu=neon-vfpv4 -ftree-vectorize -marm -ftree-loop-linear -floop-strip-mine -fgraphite-identity -floop-parallelize-all -floop-interchange -ftree-loop-distribution -floop-block
+		   -marm -ftree-loop-linear -floop-strip-mine -fgraphite-identity -floop-parallelize-all -floop-interchange -ftree-loop-distribution -floop-block
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
