@@ -65,7 +65,7 @@ static spinlock_t speedchange_cpumask_lock;
 static struct mutex gov_lock;
 
 /* Hi speed to bump to from lo speed when load burst (default max) */
-static unsigned int hispeed_freq;
+static unsigned int hispeed_freq=600000;
 
 /* Go to hi speed when CPU load at or above this value. */
 #define DEFAULT_GO_HISPEED_LOAD 99
@@ -76,7 +76,7 @@ static unsigned int sampling_down_factor;
 
 /* Target load.  Lower values result in higher CPU speeds. */
 #define DEFAULT_TARGET_LOAD 90
-static unsigned int default_target_loads[] = {DEFAULT_TARGET_LOAD};
+static unsigned int default_target_loads[] = {85, 1200000, 90, 1300000, 95, 1400000,  99};
 static spinlock_t target_loads_lock;
 static unsigned int *target_loads = default_target_loads;
 static int ntarget_loads = ARRAY_SIZE(default_target_loads);
@@ -84,7 +84,7 @@ static int ntarget_loads = ARRAY_SIZE(default_target_loads);
 /*
  * The minimum amount of time to spend at a frequency before we can ramp down.
  */
-#define DEFAULT_MIN_SAMPLE_TIME (80 * USEC_PER_MSEC)
+#define DEFAULT_MIN_SAMPLE_TIME (60 * USEC_PER_MSEC)
 static unsigned long min_sample_time = DEFAULT_MIN_SAMPLE_TIME;
 
 /*
@@ -118,7 +118,7 @@ static u64 boostpulse_endtime;
  * Max additional time to wait in idle, beyond timer_rate, at speeds above
  * minimum before wakeup to reduce speed, or -1 if unnecessary.
  */
-#define DEFAULT_TIMER_SLACK (4 * DEFAULT_TIMER_RATE)
+#define DEFAULT_TIMER_SLACK (80000)
 static int timer_slack_val = DEFAULT_TIMER_SLACK;
 
 static bool io_is_busy = 1;
@@ -130,10 +130,10 @@ static bool io_is_busy = 1;
  * sync_freq
  */
 static unsigned int up_threshold_any_cpu_load = 95;
-static unsigned int sync_freq = 729600;
-static unsigned int up_threshold_any_cpu_freq = 960000;
+static unsigned int sync_freq = 1700000;
+static unsigned int up_threshold_any_cpu_freq = 1300000;
 
-static int two_phase_freq_array[NR_CPUS] = {[0 ... NR_CPUS-1] = 1728000} ;
+static int two_phase_freq_array[NR_CPUS] = {[0 ... NR_CPUS-1] = 1100000} ;
 
 static int cpufreq_governor_intelliactive(struct cpufreq_policy *policy,
 		unsigned int event);
