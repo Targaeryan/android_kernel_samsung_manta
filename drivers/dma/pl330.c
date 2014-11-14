@@ -395,6 +395,8 @@ struct pl330_req {
 	/* Pointer to first xfer in the request. */
 	struct pl330_xfer *x;
 	unsigned int infiniteloop;
+	/* Hook to attach to DMAC's list of reqs with due callback */
+	struct list_head rqd;
 };
 
 /*
@@ -464,8 +466,6 @@ struct _pl330_req {
 	/* Number of bytes taken to setup MC for the req */
 	u32 mc_len;
 	struct pl330_req *r;
-	/* Hook to attach to DMAC's list of reqs with due callback */
-	struct list_head rqd;
 };
 
 /* ToBeDone for tasklet */
@@ -519,6 +519,7 @@ struct pl330_dmac {
 	struct _pl330_tbd	dmac_tbd;
 	/* State of DMAC operation */
 	enum pl330_dmac_state	state;
+	char                    nesting;
 };
 
 enum desc_status {
@@ -1784,7 +1785,7 @@ static void pl330_dotask(unsigned long data)
 /* Returns 1 if state was updated, 0 otherwise */
 static int pl330_update(const struct pl330_info *pi)
 {
-	struct _pl330_req *rqdone;
+	struct pl330_req *rqdone, *tmp;
 	struct pl330_dmac *pl330;
 	unsigned long flags;
 	void __iomem *regs;
@@ -1798,6 +1799,7 @@ static int pl330_update(const struct pl330_info *pi)
 	pl330 = pi->pl330_data;
 
 	spin_lock_irqsave(&pl330->lock, flags);
+	pl330->nesting++;
 
 	val = readl(regs + FSM) & 0x1;
 	if (val)
@@ -1844,6 +1846,11 @@ static int pl330_update(const struct pl330_info *pi)
 			ret = 1;
 
 			id = pl330->events[ev];
+			if (id == -1) { /* Freed */
+				dev_err(pi->dev, "freed event nest=%d ev=%d\n",
+					pl330->nesting, ev);
+				continue;
+			}
 
 			thrd = &pl330->channels[id];
 
@@ -1851,8 +1858,18 @@ static int pl330_update(const struct pl330_info *pi)
 			if (active == -1) /* Aborted */
 				continue;
 
-			rqdone = &thrd->req[active];
-			if (!rqdone->r->infiniteloop) {
+			BUG_ON(active >= ARRAY_SIZE(thrd->req));
+			/* Detach the req */
+			rqdone = thrd->req[active].r;
+			if (!rqdone) {
+				dev_err(pi->dev,
+		"empty rqdone nest=%d ev=%d id=%d val=%x inten=%x active=%d\n",
+					pl330->nesting, ev, id, (int)val,
+					(int)inten, active);
+				continue;
+			}
+			if (!rqdone->infiniteloop) {
+				thrd->req[active].r = NULL;
 				mark_free(thrd, active);
 
 				/* Get going again ASAP */
@@ -1865,25 +1882,16 @@ static int pl330_update(const struct pl330_info *pi)
 	}
 
 	/* Now that we are in no hurry, do the callbacks */
-	while (!list_empty(&pl330->req_done)) {
-		struct pl330_req *r;
-
-		rqdone = container_of(pl330->req_done.next,
-					struct _pl330_req, rqd);
-
-		list_del_init(&rqdone->rqd);
-
-		/* Detach the req */
-		r = rqdone->r;
-		if (!r->infiniteloop)
-			rqdone->r = NULL;
+	list_for_each_entry_safe(rqdone, tmp, &pl330->req_done, rqd) {
+		list_del(&rqdone->rqd);
 
 		spin_unlock_irqrestore(&pl330->lock, flags);
-		_callback(r, PL330_ERR_NONE);
+		_callback(rqdone, PL330_ERR_NONE);
 		spin_lock_irqsave(&pl330->lock, flags);
 	}
 
 updt_exit:
+	pl330->nesting--;
 	spin_unlock_irqrestore(&pl330->lock, flags);
 
 	if (pl330->dmac_tbd.reset_dmac
@@ -2570,8 +2578,6 @@ static void pl330_free_chan_resources(struct dma_chan *chan)
 {
 	struct dma_pl330_chan *pch = to_pchan(chan);
 	unsigned long flags;
-
-//	tasklet_kill(&pch->task);
 
 	spin_lock_irqsave(&pch->lock, flags);
 
