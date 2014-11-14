@@ -14,7 +14,7 @@ txtrst=$(tput sgr0) # Reset
 export KERNELDIR=`readlink -f .`
 export PARENT_DIR=`readlink -f ..`
 export INITRAMFS_DEST=$KERNELDIR/kernel/usr/initramfs
-export INITRAMFS_SOURCE=/home/khaon/Documents/kernels/Ramdisks/AOSP_MANTA_4.4
+export INITRAMFS_SOURCE=/home/khaon/Documents/kernels/Ramdisks/AOSP_MANTA_5.0
 export PACKAGEDIR=/home/khaon/Documents/kernels/Packages/AOSP_Manta
 export ZIP_TEMPLATE=/home/khaon/Documents/kernels/Packages/META-INF/Manta
 #Enable FIPS mode
