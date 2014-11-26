@@ -13,7 +13,8 @@ txtrst=$(tput sgr0) # Reset
 
 export KERNELDIR=`readlink -f .`
 export PARENT_DIR=`readlink -f ..`
-export INITRAMFS_SOURCE=/home/khaon/Documents/kernels/Ramdisks/AOSP_MANTA_5.0
+export INITRAMFS_F2FS=/home/khaon/Documents/kernels/Ramdisks/CM12_MANTA_F2FS
+export INITRAMFS_EXT4=/home/khaon/Documents/kernels/Ramdisks/CM12_MANTA_EXT4
 export PACKAGEDIR=/home/khaon/Documents/kernels/Packages/AOSP_Manta
 export ZIP_TEMPLATE=/home/khaon/Documents/kernels/Packages/META-INF/Manta
 #Enable FIPS mode
@@ -49,16 +50,26 @@ if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
 	echo "Copy zImage to Package"
 	cp arch/arm/boot/zImage $PACKAGEDIR/zImage
 
-	echo "Make boot.img"
-	./mkbootfs $INITRAMFS_SOURCE | gzip > $PACKAGEDIR/ramdisk.gz
+	echo "Make f2fs boot.img"
+	./mkbootfs $INITRAMFS_F2FS | gzip > $PACKAGEDIR/ramdisk.gz
 	./mkbootimg --cmdline 'console = null androidboot.selinux=permissive' --kernel $PACKAGEDIR/zImage --ramdisk $PACKAGEDIR/ramdisk.gz --base 0x10000000 --pagesize 2048 --ramdiskaddr 0x11000000 --output $PACKAGEDIR/boot.img
 	export curdate=`date "+%m-%d-%Y"`
 	cd $PACKAGEDIR
 	cp -R $ZIP_TEMPLATE/* .
 	rm ramdisk.gz
-	rm zImage
 	rm ../khaon_kernel_manta_linux*.zip
-	zip -r ../khaon_kernel_manta_linux_mainline-$curdate.zip .
+	zip -r ../khaon_kernel_manta_linux_mainline-"${curdate}"_F2FS_CM12.zip . -x zImage
+  rm boot.img
+	cd $KERNELDIR
+	echo ""
+
+	echo "Make ext4 boot.img"
+	./mkbootfs $INITRAMFS_EXT4 | gzip > $PACKAGEDIR/ramdisk.gz
+	./mkbootimg --cmdline 'console = null androidboot.selinux=permissive' --kernel $PACKAGEDIR/zImage --ramdisk $PACKAGEDIR/ramdisk.gz --base 0x10000000 --pagesize 2048 --ramdiskaddr 0x11000000 --output $PACKAGEDIR/boot.img
+	cd $PACKAGEDIR
+	rm ramdisk.gz
+  rm zImage
+  zip -r ../khaon_kernel_manta_linux_mainline-"${curdate}"_EXT4_CM12.zip . -x zImage
 	cd $KERNELDIR
 else
 	echo "KERNEL DID NOT BUILD! no zImage exist"
