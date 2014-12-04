@@ -20,7 +20,7 @@ export ZIP_TEMPLATE=/home/khaon/Documents/kernels/Packages/META-INF/Manta
 #Enable FIPS mode
 export USE_SEC_FIPS_MODE=true
 export ARCH=arm
-export CROSS_COMPILE=/home/khaon/Documents/toolchains/sabermod-arm-eabi-4.9/bin/arm-eabi-
+export CROSS_COMPILE=/home/khaon/Documents/toolchains/linar-4.7.a15/bin/arm-cortex_a15-linux-gnueabihf-
 
 echo "${txtbld} Remove old Package Files ${txtrst}"
 rm -rf $PACKAGEDIR/*
@@ -35,7 +35,7 @@ rm $PACKAGEDIR/zImage
 rm arch/arm/boot/zImage
 
 echo "${bldblu} Make the kernel ${txtrst}"
-make manta_defconfig
+make khaon_manta_defconfig
 
 make -j12
 
