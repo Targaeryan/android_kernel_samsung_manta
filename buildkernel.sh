@@ -42,9 +42,6 @@ make -j12
 echo "${txtbld} Copy modules to Package ${txtrst} "
 cp -a $(find . -name *.ko -print |grep -v initramfs) $PACKAGEDIR/system/lib/modules
 
-echo "${txtbld} Copy scripts to init.d ${txtrst}"
-cp $KERNELDIR/frandom/00frandom $PACKAGEDIR/system/etc/init.d
-
 if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
 	echo " ${bldgrn} Kernel built !! ${txtrst}"
 	echo "Copy zImage to Package"
