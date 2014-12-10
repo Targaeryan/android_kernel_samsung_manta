@@ -29,12 +29,12 @@
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 
-#define DEF_SAMPLING_RATE			(40000)
+#define DEF_SAMPLING_RATE			(45000)
 #define DEF_FREQUENCY_DOWN_DIFFERENTIAL		(10)
-#define DEF_FREQUENCY_UP_THRESHOLD		(90)
+#define DEF_FREQUENCY_UP_THRESHOLD		(95)
 #define DEF_SAMPLING_DOWN_FACTOR		(1)
 #define MAX_SAMPLING_DOWN_FACTOR		(100000)
-#define MICRO_FREQUENCY_DOWN_DIFFERENTIAL	(3)
+#define MICRO_FREQUENCY_DOWN_DIFFERENTIAL	(5)
 #define MICRO_FREQUENCY_UP_THRESHOLD		(95)
 #define MICRO_FREQUENCY_MIN_SAMPLE_RATE		(10000)
 #define MIN_FREQUENCY_UP_THRESHOLD		(11)
@@ -49,12 +49,12 @@
 #define DEF_FREQ_DOWN_STEP			(550000)
 #define DEF_FREQ_DOWN_STEP_BARRIER		(1190400)
 #else
-#define DEF_POWER_SAVE_FREQUENCY		(800000)
-#define DEF_TWO_PHASE_FREQUENCY			(1100000)
+#define DEF_POWER_SAVE_FREQUENCY		(700000)
+#define DEF_TWO_PHASE_FREQUENCY			(1200000)
 #define DBS_INPUT_EVENT_MIN_FREQ		(600000)
-#define DEF_FREQUENCY_OPTIMAL			(600000)
-#define DEF_FREQ_DOWN_STEP			(350000)
-#define DEF_FREQ_DOWN_STEP_BARRIER		(700000)
+#define DEF_FREQUENCY_OPTIMAL			(700000)
+#define DEF_FREQ_DOWN_STEP			(300000)
+#define DEF_FREQ_DOWN_STEP_BARRIER		(800000)
 #endif
 
 #define DEF_INPUT_BOOST_DURATION		(2)
@@ -163,8 +163,9 @@ static struct dbs_tuners {
 	.down_differential_multi_core = MICRO_FREQUENCY_DOWN_DIFFERENTIAL,
 	.up_threshold_any_cpu_load = DEF_FREQUENCY_UP_THRESHOLD,
 	.ignore_nice = 0,
+  .io_is_busy = 1,
 	.powersave_bias = 0,
-	.optimal_freq = 0,
+	.optimal_freq = DEF_FREQUENCY_OPTIMAL,
 	.shortcut = 0,
 	.power_save_freq = DEF_POWER_SAVE_FREQUENCY,
 	.two_phase_freq = DEF_TWO_PHASE_FREQUENCY,
@@ -774,8 +775,8 @@ static ssize_t store_two_phase_freq(struct kobject *a, struct attribute *b,
 	dbs_info = &per_cpu(imm_cpu_dbs_info, 0);
 	policy = dbs_info->cur_policy;
 	if (policy) {
-		if (input < policy->cpuinfo.min_freq ||
-		    input > policy->cpuinfo.max_freq)
+		if (input < policy->user_policy.min ||
+		    input > policy->user_policy.max)
 			return -EINVAL;
 		if (dbs_tuners_ins.two_phase_freq != input) {
 			dbs_tuners_ins.two_phase_freq = input;
@@ -865,8 +866,8 @@ static int adjust_freq_map_table(int freq, int cnt,
 	int i, upper, lower;
 
 	if (policy && tbl) {
-		upper = policy->cpuinfo.max_freq;
-		lower = policy->cpuinfo.min_freq;
+		upper = policy->user_policy.max;
+		lower = policy->user_policy.min;
 	}
 	else
 		return freq;
