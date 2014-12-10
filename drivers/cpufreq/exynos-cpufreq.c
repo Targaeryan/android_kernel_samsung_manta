@@ -101,6 +101,12 @@ static int exynos_cpufreq_get_index(unsigned int freq)
 	return -EINVAL;
 }
 
+struct cpufreq_frequency_table *exynos_cpufreq_frequency_get_table(void)
+{
+	return exynos_info->freq_table;
+}
+EXPORT_SYMBOL_GPL(exynos_cpufreq_frequency_get_table);
+
 static int exynos_cpufreq_scale(unsigned int target_freq, unsigned int curr_freq)
 {
 	unsigned int *volt_table = exynos_info->volt_table;
