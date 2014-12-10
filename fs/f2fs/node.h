@@ -106,7 +106,8 @@ static inline void raw_nat_from_node_info(struct f2fs_nat_entry *raw_ne,
 enum mem_type {
 	FREE_NIDS,	/* indicates the free nid list */
 	NAT_ENTRIES,	/* indicates the cached nat entry */
-	DIRTY_DENTS	/* indicates dirty dentry pages */
+	DIRTY_DENTS,	/* indicates dirty dentry pages */
+	INO_ENTRIES,	/* indicates inode entries */
 };
 
 struct nat_entry_set {
@@ -130,7 +131,7 @@ struct free_nid {
 	int state;		/* in use or not: NID_NEW or NID_ALLOC */
 };
 
-static inline int next_free_nid(struct f2fs_sb_info *sbi, nid_t *nid)
+static inline void next_free_nid(struct f2fs_sb_info *sbi, nid_t *nid)
 {
 	struct f2fs_nm_info *nm_i = NM_I(sbi);
 	struct free_nid *fnid;
@@ -138,12 +139,11 @@ static inline int next_free_nid(struct f2fs_sb_info *sbi, nid_t *nid)
 	spin_lock(&nm_i->free_nid_list_lock);
 	if (nm_i->fcnt <= 0) {
 		spin_unlock(&nm_i->free_nid_list_lock);
-		return -1;
+		return;
 	}
 	fnid = list_entry(nm_i->free_nid_list.next, struct free_nid, list);
 	*nid = fnid->nid;
 	spin_unlock(&nm_i->free_nid_list_lock);
-	return 0;
 }
 
 /*
@@ -193,10 +193,7 @@ static inline void set_to_next_nat(struct f2fs_nm_info *nm_i, nid_t start_nid)
 {
 	unsigned int block_off = NAT_BLOCK_OFFSET(start_nid);
 
-	if (f2fs_test_bit(block_off, nm_i->nat_bitmap))
-		f2fs_clear_bit(block_off, nm_i->nat_bitmap);
-	else
-		f2fs_set_bit(block_off, nm_i->nat_bitmap);
+	f2fs_change_bit(block_off, nm_i->nat_bitmap);
 }
 
 static inline void fill_node_footer(struct page *page, nid_t nid,
