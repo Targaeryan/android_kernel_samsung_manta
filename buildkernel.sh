@@ -70,9 +70,10 @@ if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
 
   echo ""
   echo "${txtbld} Make AnyKernel flashable archive ${txtrst} "
-  cp zImage $ANY_KERNEL
   rm ../UPDATE-AnyKernel2-khaon-kernel-manta-*.zip
   cd $ANY_KERNEL
+  git clean -fdx; git reset --hard; git checkout manta;
+  cp $KERNELDIR/arch/arm/boot/zImage zImage
   zip -r9 $PACKAGEDIR/../UPDATE-AnyKernel2-khaon-kernel-manta-"${curdate}".zip * -x README UPDATE-AnyKernel2.zip .git *~
 	cd $KERNELDIR
 else
