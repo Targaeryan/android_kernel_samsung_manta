@@ -67,6 +67,37 @@ static struct cpufreq_frequency_table exynos5250_freq_table[] = {
 	{0, CPUFREQ_TABLE_END},
 };
 
+static struct cpufreq_frequency_table exynos5250_freq_table_inverted[] = {
+	{L0, 100 * 1000},
+	{L1, 200 * 1000},
+	{L2, 300 * 1000},
+	{L3, 400 * 1000},
+	{L4, 500 * 1000},
+	{L5, 600 * 1000},
+	{L6, 700 * 1000},
+	{L7, 800 * 1000},
+	{L8, 900 * 1000},
+	{L9, 1000 * 1000},
+	{L10, 1100 * 1000},
+	{L11, 1200 * 1000},
+	{L12, 1300 * 1000},
+	{L13, 1400 * 1000},
+	{L14, 1500 * 1000},
+	{L15, 1600 * 1000},
+	{L16, 1700 * 1000},
+	{L17, 1800 * 1000},
+	{L18, 1900 * 1000},
+	{L19, 2000 * 1000},
+	{L20, 2100 * 1000},
+	{0, CPUFREQ_TABLE_END},
+};
+
+struct cpufreq_frequency_table *cpufreq_frequency_get_table_ordered()
+{
+	return exynos5250_freq_table_inverted;
+}
+EXPORT_SYMBOL_GPL(cpufreq_frequency_get_table_ordered);
+
 /* Minimum memory throughput in megabytes per second */
 static int exynos5250_bus_table[CPUFREQ_LEVEL_END] = {
 	933000, /* 2.1 GHz */

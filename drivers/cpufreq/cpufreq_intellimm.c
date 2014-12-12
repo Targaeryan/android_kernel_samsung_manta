@@ -920,7 +920,7 @@ static void reset_freq_map_table(struct cpufreq_policy *policy)
 
 static void dbs_init_freq_map_table(struct cpufreq_policy *policy)
 {
-	tbl = cpufreq_frequency_get_table(0);
+	tbl = cpufreq_frequency_get_table_ordered();
 
 	for (freq_cnt = 0;
 		(tbl[freq_cnt].frequency != CPUFREQ_TABLE_END);
