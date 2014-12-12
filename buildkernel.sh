@@ -44,32 +44,37 @@ echo "${txtbld} Copy modules to Package ${txtrst} "
 cp -a $(find . -name *.ko -print |grep -v initramfs) $PACKAGEDIR/system/lib/modules
 
 if [ -e $KERNELDIR/arch/arm/boot/zImage ]; then
+
 	echo " ${bldgrn} Kernel built !! ${txtrst}"
+
 	echo "Copy zImage to Package"
 	cp arch/arm/boot/zImage $PACKAGEDIR/zImage
-
-	echo "${txtbld} Make f2fs boot.img ${txtrst}"
-	./mkbootfs $INITRAMFS_F2FS | gzip > $PACKAGEDIR/ramdisk.gz
-	./mkbootimg --cmdline 'console = null androidboot.selinux=permissive' --kernel $PACKAGEDIR/zImage --ramdisk $PACKAGEDIR/ramdisk.gz --base 0x10000000 --pagesize 2048 --ramdiskaddr 0x11000000 --output $PACKAGEDIR/boot.img
 	export curdate=`date "+%m-%d-%Y"`
+
 	cd $PACKAGEDIR
-	cp -R $ZIP_TEMPLATE/* .
-	rm ramdisk.gz
-	rm ../khaon_kernel_manta_linux*.zip
-	zip -r ../khaon_kernel_manta_linux_mainline-"${curdate}"_F2FS_CM12.zip . -x zImage *~
-  rm boot.img
-	cd $KERNELDIR
-	echo ""
+	cp -R $ZIP_TEMPLATE/* .  
+	rm ../khaon_kernel_manta_*.zip
 
 	echo "${txtbld} Make ext4 boot.img ${txtrst}"
-	./mkbootfs $INITRAMFS_EXT4 | gzip > $PACKAGEDIR/ramdisk.gz
-	./mkbootimg --cmdline 'console = null androidboot.selinux=permissive' --kernel $PACKAGEDIR/zImage --ramdisk $PACKAGEDIR/ramdisk.gz --base 0x10000000 --pagesize 2048 --ramdiskaddr 0x11000000 --output $PACKAGEDIR/boot.img
-	cd $PACKAGEDIR
+	echo ""
+	$KERNELDIR/mkbootfs $INITRAMFS_EXT4 | gzip > $PACKAGEDIR/ramdisk.gz
+	$KERNELDIR/mkbootimg --cmdline 'console = null androidboot.selinux=permissive' --kernel $PACKAGEDIR/zImage --ramdisk $PACKAGEDIR/ramdisk.gz --base 0x10000000 --pagesize 2048 --ramdiskaddr 0x11000000 --output $PACKAGEDIR/boot.img
 	rm ramdisk.gz
-  zip -r ../khaon_kernel_manta_linux_mainline-"${curdate}"_EXT4_CM12.zip . -x zImage *~
+  zip -r ../khaon_kernel_manta_-"${curdate}"_EXT4_CM12.zip . -x zImage *~  
+  rm boot.img
+	echo ""
 
-  echo ""
+	echo "${txtbld} Make f2fs boot.img ${txtrst}"
+	echo ""
+	$KERNELDIR/mkbootfs $INITRAMFS_F2FS | gzip > $PACKAGEDIR/ramdisk.gz
+	$KERNELDIR/mkbootimg --cmdline 'console = null androidboot.selinux=permissive' --kernel $PACKAGEDIR/zImage --ramdisk $PACKAGEDIR/ramdisk.gz --base 0x10000000 --pagesize 2048 --ramdiskaddr 0x11000000 --output $PACKAGEDIR/boot.img
+	rm ramdisk.gz
+  rm zImage
+	zip -r ../khaon_kernel_manta_-"${curdate}"_F2FS_CM12.zip . -x zImage *~  
+	echo ""
+
   echo "${txtbld} Make AnyKernel flashable archive ${txtrst} "
+	echo ""
   rm ../UPDATE-AnyKernel2-khaon-kernel-manta-*.zip
   cd $ANY_KERNEL
   git clean -fdx; git reset --hard; git checkout manta;
