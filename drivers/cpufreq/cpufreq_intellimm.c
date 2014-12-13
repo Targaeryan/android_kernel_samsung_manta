@@ -902,20 +902,18 @@ static void reset_freq_map_table(struct cpufreq_policy *policy)
 	low_freq = adjust_freq_map_table(dbs_tuners_ins.power_save_freq,
 			freq_cnt, policy);
 
-	for (index = 0; index < 5; index++) {
+	for (index = 0; tblmap[0][index] <= low_freq ; index++)
 		tblmap[0][index] = low_freq;
-		low_index = index;
-	}
+
+  low_index = index;
 
 	real_freq = adjust_freq_map_table(dbs_tuners_ins.two_phase_freq,
 		freq_cnt, policy);
 
-	for (index = 5; index < freq_cnt; index++) {
-		if (tbl[index].frequency <= real_freq) {
-			tblmap[0][index] = real_freq;
-			nom_index = index;
-		}
-	}
+	for (; tbl[index].frequency <= real_freq; index++)
+		tblmap[0][index] = real_freq;
+	
+  nom_index = index;
 }
 
 static void dbs_init_freq_map_table(struct cpufreq_policy *policy)
