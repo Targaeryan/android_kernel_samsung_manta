@@ -23,6 +23,7 @@
 #include <linux/tick.h>
 #include <linux/ktime.h>
 #include <linux/sched.h>
+#include <linux/input.h>
 
 /*
  * dbs is used in this file as a shortform for demandbased switching
@@ -56,11 +57,23 @@ static unsigned int Lblock_cycles_offline = 0;
 static unsigned int Lblock_cycles_raise = 0;
 static unsigned int Lblock_cycles_reduce = 0;
 
+static bool boostpulse_relayf = false;
+static unsigned int boost_hold_cycles_cnt = 0;
+
 #define LATENCY_MULTIPLIER			(1000)
 #define MIN_LATENCY_MULTIPLIER			(100)
 #define DEF_SAMPLING_DOWN_FACTOR		(1)
 #define MAX_SAMPLING_DOWN_FACTOR		(10)
 #define TRANSITION_LATENCY_LIMIT		(10 * 1000 * 1000)
+
+#define MIN_TIME_INTERVAL_US (150 * USEC_PER_MSEC)
+
+/*
+ * Use this variable in your governor of choice to calculate when the cpufreq
+ * core is allowed to ramp the cpu down after an input event. That logic is done
+ * by you, this var only outputs the last time in us an event was captured
+ */
+static u64 last_input_time = 0;
 
 struct work_struct hotplug_offline_work;
 struct work_struct hotplug_online_work;
@@ -549,6 +562,27 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 
 	policy = this_dbs_info->cur_policy;
 
+	if (boostpulse_relayf)
+	{
+		
+		if (boost_hold_cycles_cnt >= dbs_tuners_ins.boost_hold_cycles)
+		{
+			boostpulse_relayf = false;
+			boost_hold_cycles_cnt = 0;
+		}
+		boost_hold_cycles_cnt++;
+
+		this_dbs_info->down_skip = 0;
+		/* if we are already at full speed then break out early */
+		if (this_dbs_info->requested_freq == policy->max || policy->cur >= dbs_tuners_ins.boost_cpu || this_dbs_info->requested_freq > dbs_tuners_ins.boost_cpu)
+			return;
+
+		this_dbs_info->requested_freq = dbs_tuners_ins.boost_cpu;
+		__cpufreq_driver_target(policy, this_dbs_info->requested_freq,
+			CPUFREQ_RELATION_H);
+		return;
+	}
+
 	/*
 	 * Every sampling_rate, we check, if current idle time is less
 	 * than 20% (default), then we try to increase frequency
@@ -629,7 +663,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	if (max_load > dbs_tuners_ins.up_threshold) {
 		Lblock_cycles_raise++;
 		if ( Lblock_cycles_raise > dbs_tuners_ins.block_cycles_raise)
-		 {
+		{
 			/* if we are already at full speed then break out early */
 			if (this_dbs_info->requested_freq == policy->max){
 				Lblock_cycles_raise = 0;
@@ -701,6 +735,100 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		return;
 	}
 }
+
+void boostpulse_relay_kt(void)
+{
+	if (!boostpulse_relayf)
+	{
+		if (num_online_cpus() < 2 && dbs_tuners_ins.boost_turn_on_2nd_core)
+			schedule_work_on(0, &hotplug_online_work);
+		else if (dbs_tuners_ins.boost_turn_on_2nd_core == 0 && dbs_tuners_ins.boost_cpu == 0)
+			return;
+
+		boostpulse_relayf = true;
+		boost_hold_cycles_cnt = 0;
+	}
+	else
+	{
+		if (boost_host_cycles_cnt >= 3)
+      boost_hold_cycles_cnt = 0;
+	}
+}
+
+static void boost_input_event(struct input_handle *handle,
+                unsigned int type, unsigned int code, int value)
+{
+	u64 now;
+
+	if ((type == EV_ABS)) {
+		now = ktime_to_us(ktime_get());
+
+		if (now - last_input_time < MIN_TIME_INTERVAL_US)
+			return;
+
+    boostpulse_relay_kt();
+		last_input_time = ktime_to_us(ktime_get());
+	}
+}
+
+static int boost_input_connect(struct input_handler *handler,
+                struct input_dev *dev, const struct input_device_id *id)
+{
+	struct input_handle *handle;
+	int error;
+
+	handle = kzalloc(sizeof(*handle), GFP_KERNEL);
+	if (handle == NULL)
+		return -ENOMEM;
+
+	handle->dev = dev;
+	handle->handler = handler;
+	handle->name = handler->name;
+
+	error = input_register_handle(handle);
+	if (error)
+		goto err;
+
+	error = input_open_device(handle);
+        if (error) {
+                input_unregister_handle(handle);
+		goto err;
+	}
+
+	return 0;
+
+err:
+	kfree(handle);
+	return error;
+}
+
+static void boost_input_disconnect(struct input_handle *handle)
+{
+	input_close_device(handle);
+	input_unregister_handle(handle);
+	kfree(handle);
+}
+
+static const struct input_device_id boost_ids[] = {
+	{
+		.flags = INPUT_DEVICE_ID_MATCH_EVBIT,
+		.evbit = { BIT_MASK(EV_ABS) },
+		/* assumption: MT_.._X & MT_.._Y are in the same long */
+		.absbit = { [BIT_WORD(ABS_MT_POSITION_X)] =
+				BIT_MASK(ABS_MT_POSITION_X) |
+				BIT_MASK(ABS_MT_POSITION_Y) },
+	},
+	{ },
+};
+
+static struct input_handler boost_input_handler = {
+	.event          = boost_input_event,
+	.connect        = boost_input_connect,
+	.disconnect     = boost_input_disconnect,
+	.name           = "ktoonservative-boost",
+	.id_table       = boost_ids,
+};
+
 
 static void __cpuinit hotplug_offline_work_fn(struct work_struct *work)
 {
